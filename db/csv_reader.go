@@ -2,10 +2,13 @@ package db
 
 import (
 	"encoding/csv"
+	"fmt"
 	"move_csv_vacancies_to_db/models"
 	"os"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const Folder = "Vacancies"
@@ -14,10 +17,17 @@ const DefaultDate = "2022-05-25 18:02:04.000"
 
 func MoveVacanciesFromCsvToPostgres() {
 	files, err := os.ReadDir(Folder)
-	checkErr(err)
+	if err != nil {
+		if err.Error() == "open Vacancies: The system cannot find the file specified." {
+			panic("Создайте папку Vacancies и поместите туда csv-файлы")
+		} else {
+			panic(err)
+		}
+	}
 	for _, item := range files {
 		if strings.HasSuffix(item.Name(), ".csv") {
 			filePath := path.Join(Folder, item.Name())
+			fmt.Println(filePath)
 			vacancies := GetVacanciesFromFile(filePath)
 			SaveVacancies(vacancies)
 			os.Remove(filePath)
@@ -33,12 +43,20 @@ func GetVacanciesFromFile(file string) (vacancies []models.Vacancy) {
 
 	reader := csv.NewReader(f)
 	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+	reader.Comma = ';'
 	records, err := reader.ReadAll()
 	checkErr(err)
 
-	for _, row := range records {
+	for row_num, row := range records {
+		if row_num == 0 {
+			continue
+		}
+		id, err := strconv.Atoi(row[0])
+		checkErr(err)
+
 		vacancy :=  models.Vacancy{
-			Id: row[0],
+			Id: id,
 			Url: row[1],
 			Title: row[2],
 			PositionName: row[3],
@@ -48,9 +66,9 @@ func GetVacanciesFromFile(file string) (vacancies []models.Vacancy) {
 			SalaryFrom: row[7],
 			SalaryTo: row[8],
 			Skills: row[9],
-			Date: DefaultDate,
+			VacancyDate: DefaultDate,
+			ParsingDate: time.Now().String(),
 		}
-
 		vacancy.PositionId= getPositionIdByName(vacancy.PositionName)
 		if vacancy.SalaryFrom == "None" || len(vacancy.SalaryFrom) == 0{
 			vacancy.SalaryFrom = "0"
