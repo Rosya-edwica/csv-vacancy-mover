@@ -20,7 +20,7 @@ func GetPositions() (positions []models.Position) {
 	return
 }
 
-func SaveVacancies(vacancies []models.Vacancy) {
+func SaveVacanciesToPostgres(vacancies []models.Vacancy) {
 	db := ConnectToPostgres()
 	defer db.Close()
 	for i:=0; i<len(vacancies); i+=2000 {
@@ -28,7 +28,7 @@ func SaveVacancies(vacancies []models.Vacancy) {
 		if len(group) > 2000 {
 			group = group[:2000]
 		}
-		query, valArgs := createQueryForMultipleInsertVacancies(group)
+		query, valArgs := createQueryForMultipleInsertVacanciesPostgres(group)
 
 
 		tx, _ := db.Begin()
@@ -40,7 +40,7 @@ func SaveVacancies(vacancies []models.Vacancy) {
 
 }
 
-func createQueryForMultipleInsertVacancies(vacancies []models.Vacancy) (query string, valArgs []interface{}) {
+func createQueryForMultipleInsertVacanciesPostgres(vacancies []models.Vacancy) (query string, valArgs []interface{}) {
 	valStrings := []string{}
 	valInsertCount := 1
 	for _, v := range vacancies {
@@ -58,5 +58,39 @@ func createQueryForMultipleInsertVacancies(vacancies []models.Vacancy) (query st
 		VALUES` + strings.Join(valStrings, ",") + "ON CONFLICT DO NOTHING;"
 
 	fmt.Println("Сохранили: ", len(vacancies))
+	return
+}
+
+func GetVacanciesFromPostgres(lastId int, limit int) (vacancies []models.Vacancy) {
+	query := fmt.Sprintf("SELECT id, position_id, city_id, salary_from, salary_to,  name, url, prof_areas, specs, experience, key_skills, vacancy_date, parsing_date, platform FROM vacancy WHERE id > %d ORDER BY id ASC LIMIT %d", lastId, limit)
+	connection := ConnectToPostgres()
+	rows, err := connection.Query(query)
+	checkErr(err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var city_id, position_id, id int
+		var name, url, prof_areas, specs, experience, vacancy_date, parsing_date, key_skills, salary_from, salary_to, platform  string
+		err = rows.Scan(&id, &position_id, &city_id, &salary_from, &salary_to, &name, &url, &prof_areas, &specs, &experience, &key_skills, &vacancy_date, &parsing_date, &platform)
+		checkErr(err)
+		
+		vacancies = append(vacancies, models.Vacancy{
+			Id: id,
+			PositionId: position_id,
+			CityId: city_id, 
+			SalaryFrom: salary_from,
+			SalaryTo: salary_to,
+			Title: name,
+			Url: url,
+			Areas: prof_areas,
+			Specs: specs,
+			Experience: experience,
+			Skills: key_skills,
+			VacancyDate: vacancy_date,
+			ParsingDate: parsing_date,
+			Platform: platform,
+		})
+	}
+	connection.Close()
 	return
 }

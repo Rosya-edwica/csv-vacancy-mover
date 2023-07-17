@@ -29,7 +29,7 @@ func MoveVacanciesFromCsvToPostgres() {
 			filePath := path.Join(Folder, item.Name())
 			fmt.Println(filePath)
 			vacancies := GetVacanciesFromFile(filePath)
-			SaveVacancies(vacancies)
+			SaveVacanciesToPostgres(vacancies)
 			os.Remove(filePath)
 		}
 	}

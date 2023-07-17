@@ -1,21 +1,14 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"move_csv_vacancies_to_db/models"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 )
 
-func ConnectToMySQL() *sql.DB{
-	url := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", "edwica_root", "b00m5gQ40WB1", "83.220.175.75", "3306", "edwica")
-	connection, err := sql.Open("mysql", url)
-	checkErr(err)
-	return connection
-}
+
 
 func GetVacanciesFromMYSQL(lastId int, limit int) (vacancies []models.Vacancy) {
 	query := fmt.Sprintf("SELECT id, position_id, city_id, salary_from, salary_to,  name, url, prof_areas, specs, experience, key_skills, vacancy_date, parsing_date, platform FROM h_vacancy WHERE position_id != 0 AND id > %d ORDER BY id ASC LIMIT %d", lastId, limit)
@@ -54,5 +47,40 @@ func GetVacanciesFromMYSQL(lastId int, limit int) (vacancies []models.Vacancy) {
 		})
 	}
 	connection.Close()
+	return
+}
+
+func SaveVacanciesToMySQL(vacancies []models.Vacancy) {
+	db := ConnectToMySQL()
+	defer db.Close()
+	for i:=0; i<len(vacancies); i+=2000 {
+		group := vacancies[i:]
+		if len(group) > 2000 {
+			group = group[:2000]
+		}
+		query, valArgs := createQueryForMultipleInsertVacanciesMYSQL(group)
+
+
+		tx, _ := db.Begin()
+		_, err := db.Exec(query, valArgs...)
+		checkErr(err)
+		tx.Commit()
+		fmt.Printf("Сохранили %d вакансий\n", len(group))
+	}
+}
+
+func createQueryForMultipleInsertVacanciesMYSQL(vacancies []models.Vacancy) (query string, valArgs []interface{}) {
+	query = "INSERT IGNORE INTO h_vacancy (id, name, url, city_id, position_id, prof_areas, specs, experience, salary_from, salary_to, key_skills, vacancy_date, platform, parsing_date) VALUES "
+	for _, v := range vacancies {
+		if v.SalaryFrom == "" {
+			v.SalaryFrom = "0"
+		}
+		if v.SalaryTo == "" {
+			v.SalaryTo = "0"
+		}
+		query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),"
+		valArgs = append(valArgs,  v.Id, v.Title, v.Url, v.CityId, v.PositionId, v.Areas, v.Specs, v.Experience, v.SalaryFrom, v.SalaryTo, v.Skills, v.VacancyDate, v.Platform, v.ParsingDate)
+	}
+	query = query[0:len(query)-1]
 	return
 }
